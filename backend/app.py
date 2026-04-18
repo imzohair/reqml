@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from pymongo import MongoClient
+from pymongo.errors import PyMongoError
 from bson import ObjectId
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
@@ -21,9 +22,26 @@ CORS(
     supports_credentials=True
 )
 
-client = MongoClient(os.getenv("MONGO_URI"))
-db = client["resqmeal"]
-db.users.create_index("email", unique=True)
+client = None
+db = None
+_users_index_ready = False
+
+def get_db():
+    global client, db, _users_index_ready
+
+    if db is None:
+        mongo_uri = os.getenv("MONGO_URI")
+        if not mongo_uri:
+            raise RuntimeError("MONGO_URI is not configured.")
+
+        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000, connect=False)
+        db = client["resqmeal"]
+
+    if not _users_index_ready:
+        db.users.create_index("email", unique=True)
+        _users_index_ready = True
+
+    return db
 
 # Utility: Calculate distance using geopy
 def calculate_distance(lat1, lon1, lat2, lon2):
@@ -43,6 +61,12 @@ def serialize_user(user):
         "role": user["role"],
     }
 
+def get_database_or_response():
+    try:
+        return get_db(), None
+    except (RuntimeError, PyMongoError) as exc:
+        return None, (jsonify({"error": f"Database unavailable: {str(exc)}"}), 503)
+
 @app.after_request
 def after_request(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
@@ -61,6 +85,10 @@ def index():
 @app.route("/auth/signup", methods=["POST", "OPTIONS"])
 def signup():
     try:
+        database, error_response = get_database_or_response()
+        if error_response:
+            return error_response
+
         data = request.json or {}
         email = str(data.get("email", "")).strip().lower()
         password = str(data.get("password", ""))
@@ -72,7 +100,7 @@ def signup():
         if role not in {"donor", "ngo", "volunteer"}:
             return jsonify({"error": "Role must be 'donor', 'ngo', or 'volunteer'."}), 400
 
-        existing_user = db.users.find_one({"email": email})
+        existing_user = database.users.find_one({"email": email})
         if existing_user:
             return jsonify({"error": "An account with this email already exists."}), 409
 
@@ -82,7 +110,7 @@ def signup():
             "role": role,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        result = db.users.insert_one(user)
+        result = database.users.insert_one(user)
         user["_id"] = result.inserted_id
 
         return jsonify({
@@ -95,6 +123,10 @@ def signup():
 @app.route("/auth/login", methods=["POST", "OPTIONS"])
 def login():
     try:
+        database, error_response = get_database_or_response()
+        if error_response:
+            return error_response
+
         data = request.json or {}
         email = str(data.get("email", "")).strip().lower()
         password = str(data.get("password", ""))
@@ -102,7 +134,7 @@ def login():
         if not email or not password:
             return jsonify({"error": "Email and password are required."}), 400
 
-        user = db.users.find_one({"email": email})
+        user = database.users.find_one({"email": email})
         if not user:
             return jsonify({"error": "User does not exist."}), 404
 
@@ -116,6 +148,10 @@ def login():
 @app.route("/food/create", methods=["POST", "OPTIONS"])
 def create_food():
     try:
+        database, error_response = get_database_or_response()
+        if error_response:
+            return error_response
+
         data = request.json
         # Generate basic AI recommendation immediately if tags/qty given
         rec = ai_service.get_recommendation(
@@ -140,7 +176,7 @@ def create_food():
             "ai_status_reason": rec,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        result = db.food_listings.insert_one(insert_data)
+        result = database.food_listings.insert_one(insert_data)
         insert_data["_id"] = str(result.inserted_id)
         insert_data["id"] = str(result.inserted_id)
         return jsonify(insert_data), 201
@@ -150,7 +186,11 @@ def create_food():
 @app.route("/food/all", methods=["GET", "OPTIONS"])
 def get_all_food():
     try:
-        items = list(db.food_listings.find().sort("created_at", -1))
+        database, error_response = get_database_or_response()
+        if error_response:
+            return error_response
+
+        items = list(database.food_listings.find().sort("created_at", -1))
         for i in items:
             i["_id"] = str(i["_id"])
             i["id"] = i["_id"]
@@ -160,7 +200,7 @@ def get_all_food():
                 try:
                     donor_id = i["donor_id"]
                     query = {"_id": ObjectId(donor_id)} if len(str(donor_id)) == 24 else {"id": donor_id}
-                    user = db.users.find_one(query)
+                    user = database.users.find_one(query)
                     if user:
                         user_name = user.get("name") or email_to_name(user.get("email", ""))
                 except Exception:
@@ -174,10 +214,14 @@ def get_all_food():
 @app.route("/food/nearby", methods=["GET", "OPTIONS"])
 def get_nearby():
     try:
+        database, error_response = get_database_or_response()
+        if error_response:
+            return error_response
+
         lat = float(request.args.get('lat', 0))
         lng = float(request.args.get('lng', 0))
         
-        items = list(db.food_listings.find({"status": {"$in": ["Available", "Urgent"]}}))
+        items = list(database.food_listings.find({"status": {"$in": ["Available", "Urgent"]}}))
         
         results = []
         for row in items:
@@ -190,7 +234,7 @@ def get_nearby():
                 try:
                     donor_id = row["donor_id"]
                     query = {"_id": ObjectId(donor_id)} if len(str(donor_id)) == 24 else {"id": donor_id}
-                    user = db.users.find_one(query)
+                    user = database.users.find_one(query)
                     if user:
                         user_name = user.get("name") or email_to_name(user.get("email", ""))
                 except Exception:
@@ -210,11 +254,15 @@ def get_nearby():
 @app.route("/food/<id>/claim", methods=["PATCH", "OPTIONS"])
 def claim_food(id):
     try:
+        database, error_response = get_database_or_response()
+        if error_response:
+            return error_response
+
         data = request.json
         ngo_id = data.get('ngo_id')
         
         # Update food status
-        db.food_listings.update_one(
+        database.food_listings.update_one(
             {"_id": ObjectId(id)},
             {"$set": {"status": "Claimed"}}
         )
@@ -225,7 +273,7 @@ def claim_food(id):
             "ngo_id": ngo_id,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        result = db.claims.insert_one(claim_data)
+        result = database.claims.insert_one(claim_data)
         
         # We also need to return the updated claim data properly
         claim_data["_id"] = str(result.inserted_id)
@@ -237,14 +285,18 @@ def claim_food(id):
 @app.route("/food/<id>/status", methods=["PATCH", "OPTIONS"])
 def update_status(id):
     try:
+        database, error_response = get_database_or_response()
+        if error_response:
+            return error_response
+
         status = request.json.get("status")
-        db.food_listings.update_one(
+        database.food_listings.update_one(
             {"_id": ObjectId(id)},
             {"$set": {"status": status}}
         )
         
         # Emulate Supabase returning the updated row
-        updated = db.food_listings.find_one({"_id": ObjectId(id)})
+        updated = database.food_listings.find_one({"_id": ObjectId(id)})
         if updated:
             updated["_id"] = str(updated["_id"])
             updated["id"] = updated["_id"]
@@ -256,9 +308,14 @@ def update_status(id):
 # Background Scheduler for Expiry AI Analysis
 def check_expirations():
     try:
+        database, error_response = get_database_or_response()
+        if error_response:
+            print("Expiry check skipped: database unavailable")
+            return
+
         now = datetime.now(timezone.utc).isoformat()
         # Find active items past expiry
-        items = list(db.food_listings.find({
+        items = list(database.food_listings.find({
             "status": {"$in": ["Available", "Urgent"]},
             "expiry_time": {"$lt": now}
         }))
@@ -266,7 +323,7 @@ def check_expirations():
         for item in items:
             item_id = item["_id"]
             # Mark expired
-            db.food_listings.update_one({"_id": item_id}, {"$set": {"status": "Expired"}})
+            database.food_listings.update_one({"_id": item_id}, {"$set": {"status": "Expired"}})
             
             # Analyze why it failed
             # For exact time difference, we can estimate from created_at
@@ -283,7 +340,7 @@ def check_expirations():
             )
             
             # Update DB with AI reason
-            db.food_listings.update_one({"_id": item_id}, {"$set": {"ai_status_reason": analysis}})
+            database.food_listings.update_one({"_id": item_id}, {"$set": {"ai_status_reason": analysis}})
             print(f"Expired {item['title']} - AI Analysis: {analysis}")
             
     except Exception as e:
