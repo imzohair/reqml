@@ -38,15 +38,19 @@ function extractErrorMessage(payload: unknown, fallbackMessage: string) {
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    });
+  } catch {
+    throw new Error("Unable to reach the server right now. Please try again in a moment.");
+  }
 
   let payload: unknown = null;
   try {
@@ -78,7 +82,6 @@ export async function loginRequest(payload: AuthApiPayload) {
 
 export const api = axios.create({
   baseURL: API_BASE,
-  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
