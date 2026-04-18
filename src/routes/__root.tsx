@@ -2,6 +2,8 @@ import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/r
 import { AppShell } from "@/components/AppShell";
 import { Toaster } from "@/components/ui/sonner";
 import { Chatbot } from "@/components/Chatbot";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { FoodProvider } from "@/contexts/FoodContext";
 
 import appCss from "../styles.css?url";
 
@@ -66,10 +68,12 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   return (
-    <>
-      <AppShell />
-      <Chatbot />
-      <Toaster />
-    </>
+    <AuthProvider>
+      <FoodProvider>
+        <AppShell />
+        <Chatbot />
+        <Toaster />
+      </FoodProvider>
+    </AuthProvider>
   );
 }

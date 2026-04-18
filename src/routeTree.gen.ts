@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrackingRouteImport } from './routes/tracking'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as NgoRouteImport } from './routes/ngo'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as DonateRouteImport } from './routes/donate'
@@ -20,6 +21,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const TrackingRoute = TrackingRouteImport.update({
   id: '/tracking',
   path: '/tracking',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NgoRoute = NgoRouteImport.update({
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/donate': typeof DonateRoute
   '/login': typeof LoginRoute
   '/ngo': typeof NgoRoute
+  '/signup': typeof SignupRoute
   '/tracking': typeof TrackingRoute
 }
 export interface FileRoutesByTo {
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/donate': typeof DonateRoute
   '/login': typeof LoginRoute
   '/ngo': typeof NgoRoute
+  '/signup': typeof SignupRoute
   '/tracking': typeof TrackingRoute
 }
 export interface FileRoutesById {
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/donate': typeof DonateRoute
   '/login': typeof LoginRoute
   '/ngo': typeof NgoRoute
+  '/signup': typeof SignupRoute
   '/tracking': typeof TrackingRoute
 }
 export interface FileRouteTypes {
@@ -90,6 +99,7 @@ export interface FileRouteTypes {
     | '/donate'
     | '/login'
     | '/ngo'
+    | '/signup'
     | '/tracking'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -99,6 +109,7 @@ export interface FileRouteTypes {
     | '/donate'
     | '/login'
     | '/ngo'
+    | '/signup'
     | '/tracking'
   id:
     | '__root__'
@@ -108,6 +119,7 @@ export interface FileRouteTypes {
     | '/donate'
     | '/login'
     | '/ngo'
+    | '/signup'
     | '/tracking'
   fileRoutesById: FileRoutesById
 }
@@ -118,6 +130,7 @@ export interface RootRouteChildren {
   DonateRoute: typeof DonateRoute
   LoginRoute: typeof LoginRoute
   NgoRoute: typeof NgoRoute
+  SignupRoute: typeof SignupRoute
   TrackingRoute: typeof TrackingRoute
 }
 
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/tracking'
       fullPath: '/tracking'
       preLoaderRoute: typeof TrackingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ngo': {
@@ -182,6 +202,7 @@ const rootRouteChildren: RootRouteChildren = {
   DonateRoute: DonateRoute,
   LoginRoute: LoginRoute,
   NgoRoute: NgoRoute,
+  SignupRoute: SignupRoute,
   TrackingRoute: TrackingRoute,
 }
 export const routeTree = rootRouteImport

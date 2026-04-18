@@ -1,6 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
-import { api } from "@/lib/api";
 import {
   Utensils,
   Trash2,
@@ -30,6 +28,8 @@ import {
   Cell,
   Legend,
 } from "recharts";
+import { RequireAuth } from "@/components/RequireAuth";
+import { useFood } from "@/contexts/FoodContext";
 
 export const Route = createFileRoute("/analytics")({
   head: () => ({
@@ -87,59 +87,46 @@ function KPI({ icon: Icon, label, value, delta, positive = true }: any) {
 }
 
 function Analytics() {
-  const [stats, setStats] = useState({
-    mealsSaved: 0,
-    wasteReducedKg: 0,
-    activeListings: 0,
-    types: [
-      { name: "Vegetarian", value: 1, color: "oklch(0.62 0.17 145)" },
-      { name: "Non-Veg", value: 1, color: "oklch(0.78 0.16 70)" },
-      { name: "Packaged", value: 1, color: "oklch(0.6 0.18 240)" },
-    ]
+  const { food, loading, error } = useFood();
+
+  let mealsSaved = 0;
+  let activeListings = 0;
+  let tVeg = 0;
+  let tNon = 0;
+  let tPack = 0;
+
+  food.forEach((d) => {
+    if (d.status === "Claimed" || d.status === "Picked Up") {
+      mealsSaved += d.qty;
+    }
+    if (d.status === "Available" || d.status === "Urgent") {
+      activeListings += 1;
+    }
+    if (d.type === "veg") tVeg += d.qty;
+    else if (d.type === "nonveg") tNon += d.qty;
+    else tPack += d.qty;
   });
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const { data } = await api.get("/food/all");
-        let meals = 0;
-        let active = 0;
-        let tVeg = 0, tNon = 0, tPack = 0;
+  if (tVeg === 0 && tNon === 0 && tPack === 0) {
+    tVeg = 1;
+    tNon = 1;
+    tPack = 1;
+  }
 
-        data.forEach((d: any) => {
-          if (d.status === "Claimed" || d.status === "Picked Up") {
-            meals += d.qty;
-          }
-          if (d.status === "Available" || d.status === "Urgent") {
-            active += 1;
-          }
-          if (d.type === "veg") tVeg += d.qty;
-          else if (d.type === "nonveg") tNon += d.qty;
-          else tPack += d.qty;
-        });
+  const wasteReducedKg = Math.round(mealsSaved * 0.4);
+  const stats = {
+    mealsSaved,
+    wasteReducedKg,
+    activeListings,
+    types: [
+      { name: "Vegetarian", value: tVeg, color: "oklch(0.62 0.17 145)" },
+      { name: "Non-Veg", value: tNon, color: "oklch(0.78 0.16 70)" },
+      { name: "Packaged", value: tPack, color: "oklch(0.6 0.18 240)" },
+    ],
+  };
 
-        // Ensure pie chart renders something if DB is empty
-        if (tVeg === 0 && tNon === 0 && tPack === 0) {
-          tVeg = 1; tNon = 1; tPack = 1;
-        }
-
-        setStats({
-          mealsSaved: meals,
-          wasteReducedKg: Math.round(meals * 0.4), // Approx 400g per meal
-          activeListings: active,
-          types: [
-            { name: "Vegetarian", value: tVeg, color: "oklch(0.62 0.17 145)" },
-            { name: "Non-Veg", value: tNon, color: "oklch(0.78 0.16 70)" },
-            { name: "Packaged", value: tPack, color: "oklch(0.6 0.18 240)" },
-          ]
-        });
-      } catch(e) {
-        console.error("Analytics fetch failed", e);
-      }
-    }
-    loadData();
-  }, []);
   return (
+    <RequireAuth>
     <div className="px-6 lg:px-12 py-10 pb-24">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8 animate-fade-up">
@@ -151,6 +138,19 @@ function Analytics() {
             Real-time analytics, ResQ scores, and AI insights across the network.
           </p>
         </div>
+
+        {loading ? (
+          <div className="mb-8 rounded-3xl border border-border/50 bg-background/70 p-8 text-center shadow-sm">
+            <div className="text-lg font-bold text-foreground">Loading shared food data...</div>
+            <div className="mt-2 text-sm font-medium text-muted-foreground">Analytics will update as soon as the global food state is ready.</div>
+          </div>
+        ) : null}
+
+        {!loading && error ? (
+          <div className="mb-8 rounded-3xl border border-red-200 bg-red-50 p-8 text-center shadow-sm">
+            <div className="text-lg font-bold text-red-700">{error}</div>
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8 animate-fade-up">
           <KPI icon={Utensils} label="Total Meals Saved (Live)" value={stats.mealsSaved.toLocaleString()} delta="+Now" />
@@ -284,5 +284,6 @@ function Analytics() {
 
       </div>
     </div>
+    </RequireAuth>
   );
 }

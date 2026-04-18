@@ -103,6 +103,7 @@
   --shadow-glow: 0 0 60px color-mix(in oklab, oklch(0.78 0.18 145) 40%, transparent);
   --shadow-soft: 0 8px 30px -10px color-mix(in oklab, oklch(0.18 0.04 260) 15%, transparent);
   --shadow-card: 0 4px 20px -4px color-mix(in oklab, oklch(0.18 0.04 260) 8%, transparent);
+  --shadow-lifted: 0 24px 80px -32px color-mix(in oklab, oklch(0.18 0.04 260) 20%, transparent);
 }
 
 .dark {
@@ -133,6 +134,7 @@
     background-attachment: fixed;
     color: var(--color-foreground);
     font-feature-settings: "cv11", "ss01";
+    min-height: 100vh;
   }
   h1, h2, h3, h4 { letter-spacing: -0.02em; }
 }
@@ -162,12 +164,39 @@
   .shadow-glow { box-shadow: var(--shadow-glow); }
   .shadow-soft { box-shadow: var(--shadow-soft); }
   .shadow-card { box-shadow: var(--shadow-card); }
+  .shadow-lifted { box-shadow: var(--shadow-lifted); }
   .transition-smooth { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+  .glass-panel {
+    background: color-mix(in oklab, white 74%, transparent);
+    backdrop-filter: blur(24px) saturate(170%);
+    -webkit-backdrop-filter: blur(24px) saturate(170%);
+    border: 1px solid color-mix(in oklab, white 55%, transparent);
+    box-shadow: var(--shadow-lifted);
+  }
+  .card-premium {
+    background:
+      linear-gradient(180deg, color-mix(in oklab, white 88%, transparent), color-mix(in oklab, white 72%, transparent)),
+      radial-gradient(circle at top right, color-mix(in oklab, var(--primary) 10%, transparent), transparent 36%);
+    border: 1px solid color-mix(in oklab, white 55%, transparent);
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(20px) saturate(150%);
+  }
+  .mesh-overlay {
+    background-image:
+      radial-gradient(circle at 20% 20%, color-mix(in oklab, var(--primary) 10%, transparent), transparent 24%),
+      radial-gradient(circle at 80% 10%, color-mix(in oklab, var(--secondary) 12%, transparent), transparent 28%),
+      radial-gradient(circle at 70% 80%, color-mix(in oklab, var(--info) 10%, transparent), transparent 24%);
+  }
 
   @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
   @keyframes fade-up { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
   @keyframes pulse-glow { 0%,100%{box-shadow:0 0 0 0 color-mix(in oklab, var(--primary) 50%, transparent)} 50%{box-shadow:0 0 0 16px transparent} }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
   .animate-float { animation: float 6s ease-in-out infinite; }
   .animate-fade-up { animation: fade-up 0.6s ease-out both; }
   .animate-pulse-glow { animation: pulse-glow 2.5s ease-out infinite; }
+  .animate-shimmer { animation: shimmer 1.8s linear infinite; }
 }

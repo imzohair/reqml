@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -6,6 +7,7 @@ from pymongo import MongoClient
 from bson import ObjectId
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
+from werkzeug.security import check_password_hash, generate_password_hash
 from ai_service import ai_service
 from geopy.distance import geodesic
 
@@ -16,14 +18,77 @@ CORS(app)
 
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client["resqmeal"]
+db.users.create_index("email", unique=True)
 
 # Utility: Calculate distance using geopy
 def calculate_distance(lat1, lon1, lat2, lon2):
     return round(geodesic((lat1, lon1), (lat2, lon2)).kilometers, 2)
 
+def email_to_name(email):
+    local_part = email.split("@")[0].strip()
+    cleaned = re.sub(r"[^a-zA-Z0-9]+", " ", local_part).strip()
+    if not cleaned:
+        return "User"
+    return " ".join(word.capitalize() for word in cleaned.split())
+
+def serialize_user(user):
+    return {
+        "user_id": str(user["_id"]),
+        "email": user["email"],
+        "name": user.get("name") or email_to_name(user["email"]),
+    }
+
 @app.route("/", methods=["GET"])
 def index():
     return jsonify({"status": "Backend is running", "database": "Connected to MongoDB"}), 200
+
+@app.route("/auth/signup", methods=["POST"])
+def signup():
+    try:
+        data = request.json or {}
+        email = str(data.get("email", "")).strip().lower()
+        password = str(data.get("password", ""))
+
+        if not email or not password:
+            return jsonify({"error": "Email and password are required."}), 400
+
+        if len(password) < 6:
+            return jsonify({"error": "Password must be at least 6 characters."}), 400
+
+        existing_user = db.users.find_one({"email": email})
+        if existing_user:
+            return jsonify({"error": "An account with this email already exists."}), 409
+
+        user = {
+            "email": email,
+            "name": email_to_name(email),
+            "password_hash": generate_password_hash(password),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        result = db.users.insert_one(user)
+        user["_id"] = result.inserted_id
+
+        return jsonify(serialize_user(user)), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/auth/login", methods=["POST"])
+def login():
+    try:
+        data = request.json or {}
+        email = str(data.get("email", "")).strip().lower()
+        password = str(data.get("password", ""))
+
+        if not email or not password:
+            return jsonify({"error": "Email and password are required."}), 400
+
+        user = db.users.find_one({"email": email})
+        if not user or not check_password_hash(user.get("password_hash", ""), password):
+            return jsonify({"error": "Invalid email or password."}), 401
+
+        return jsonify(serialize_user(user)), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 @app.route("/food/create", methods=["POST"])
 def create_food():
@@ -62,10 +127,23 @@ def create_food():
 @app.route("/food/all", methods=["GET"])
 def get_all_food():
     try:
-        items = list(db.food_listings.find())
+        items = list(db.food_listings.find().sort("created_at", -1))
         for i in items:
             i["_id"] = str(i["_id"])
             i["id"] = i["_id"]
+
+            user_name = "Unknown User"
+            if i.get("donor_id"):
+                try:
+                    donor_id = i["donor_id"]
+                    query = {"_id": ObjectId(donor_id)} if len(str(donor_id)) == 24 else {"id": donor_id}
+                    user = db.users.find_one(query)
+                    if user and "name" in user:
+                        user_name = user["name"]
+                except Exception:
+                    pass
+
+            i["users"] = {"name": user_name}
         return jsonify(items), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400

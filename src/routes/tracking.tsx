@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { RequireAuth } from "@/components/RequireAuth";
 
 export const Route = createFileRoute("/tracking")({
   head: () => ({
@@ -45,6 +46,7 @@ function TrackingPage() {
   }, []);
 
   return (
+    <RequireAuth>
     <div className="px-6 lg:px-12 py-10 pb-24">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 animate-fade-up">
@@ -265,5 +267,6 @@ function TrackingPage() {
         </div>
       </div>
     </div>
+    </RequireAuth>
   );
 }
