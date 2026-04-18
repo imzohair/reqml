@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { clearStoredSession, readStoredSession, storeSession, type AuthSession } from "@/lib/auth";
+import { clearStoredSession, isValidToken, readStoredSession, storeSession, type AuthSession } from "@/lib/auth";
 
 type AuthContextType = {
   user: AuthSession | null;
@@ -20,11 +20,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    setUser(readStoredSession());
+    const nextSession = readStoredSession();
+    if (!nextSession) {
+      clearStoredSession();
+    }
+    setUser(nextSession);
     setIsReady(true);
   }, []);
 
   const login = (userData: AuthSession) => {
+    if (!isValidToken(userData.token)) {
+      clearStoredSession();
+      setUser(null);
+      return;
+    }
     setUser(userData);
     storeSession(userData);
   };

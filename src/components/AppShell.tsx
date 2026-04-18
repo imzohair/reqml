@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { getUserLabel } from "@/lib/auth";
+import { getUserLabel, type UserRole } from "@/lib/auth";
 
 const publicNav = [
   { to: "/", label: "Home", icon: Home },
@@ -30,15 +30,42 @@ const ngoNav = [
   { to: "/analytics", label: "Insights", icon: Sparkles },
 ];
 
+const volunteerNav = [
+  { to: "/tracking", label: "Volunteer Dashboard", icon: LayoutDashboard },
+  { to: "/analytics", label: "Insights", icon: Sparkles },
+];
+
+function getRoleLabel(role: UserRole) {
+  if (role === "ngo") {
+    return "NGO";
+  }
+
+  if (role === "volunteer") {
+    return "Volunteer";
+  }
+
+  return "Donor";
+}
+
+function getRoleNavigation(role: UserRole) {
+  if (role === "donor") {
+    return donorNav;
+  }
+
+  if (role === "ngo") {
+    return ngoNav;
+  }
+
+  return volunteerNav;
+}
+
 export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isReady, logout } = useAuth();
   const userLabel = user ? getUserLabel(user.email) : "";
-  const roleLabel = user?.role === "ngo" ? "NGO" : "Donor";
-  const nav = user
-    ? [...publicNav, ...(user.role === "donor" ? donorNav : ngoNav)]
-    : publicNav;
+  const roleLabel = user ? getRoleLabel(user.role) : "";
+  const nav = user ? [...publicNav, ...getRoleNavigation(user.role)] : publicNav;
 
   const handleLogout = () => {
     logout();

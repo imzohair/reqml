@@ -1,13 +1,14 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/contexts/AuthContext";
+import { getDashboardRoute, type UserRole } from "@/lib/auth";
 
 export function RequireAuth({
   children,
   allowedRoles,
 }: {
   children: React.ReactNode;
-  allowedRoles?: Array<"donor" | "ngo">;
+  allowedRoles?: UserRole[];
 }) {
   const { user, isReady } = useAuth();
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ export function RequireAuth({
   useEffect(() => {
     if (isReady && user && allowedRoles && !allowedRoles.includes(user.role)) {
       navigate({
-        to: user.role === "donor" ? "/donate" : "/ngo",
+        to: getDashboardRoute(user.role),
         replace: true,
       });
     }
